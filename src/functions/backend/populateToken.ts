@@ -1,10 +1,10 @@
 import blockfrost from '@/utils/blockfrost'
-import { deepClone } from '@odigos/ui-kit/functions'
 import { ADA, POPULATED_LOVELACE } from '@/constants'
 import type { PopulatedToken, TokenId } from '@/@types'
 import resolveTokenRegisteredMetadata from './resolveTokenRegisteredMetadata'
 import { formatIpfsReference, formatTokenAmountFromChain, fromHex, numbersFromString, splitTokenId } from '..'
 
+const deepClone = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj))
 const populateToken = async (tokenId: TokenId, options?: { populateMintTx?: boolean; quantity?: string }): Promise<PopulatedToken> => {
   if (tokenId === 'lovelace') {
     const lovelaces = options?.quantity ? Number(options.quantity) : 0
