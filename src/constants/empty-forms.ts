@@ -1,7 +1,7 @@
 import { ADA } from './common'
 import { AirdropMethodType } from '@/@types'
 import type { AirdropSettings, PopulatedToken } from '@/@types'
-import { deepClone } from '@odigos/ui-kit/functions'
+const deepClone = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj))
 
 export const POPULATED_LOVELACE: PopulatedToken = {
   tokenId: 'lovelace',
