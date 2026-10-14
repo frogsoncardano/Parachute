@@ -204,7 +204,7 @@ function FileUpload({
             })
           }
 
-          payload.push(payout)
+          if (payout.address && payout.stakeKey && payout.payout) payload.push(payout)
           setProgress((p) => ({ current: p.current + 1, max: rows.length }))
         }
 
