@@ -41,11 +41,11 @@ export default function HomePage() {
         </div>
 
         <h1 className='font-display text-6xl md:text-7xl text-g-400 tracking-wide mb-4'>
-          Frogs Parachute
+          Parachute
         </h1>
         <p className='text-g-600 text-lg mb-2 max-w-lg mx-auto'>
-          The smoothest airdrop experience in the{' '}
-          <span className='text-g-400'>Cardano pond.</span>
+          The smoothest airdrop experience on the{' '}
+          <span className='text-g-400'>Cardano.</span>
         </p>
         <p className='font-mono text-xs text-g-800 mb-10'>
           Battle-tested tx engine · Supports addr1, stake1, $handles · Auto-retry on TX size errors
@@ -85,7 +85,7 @@ export default function HomePage() {
       {/* Features */}
       <section className='pb-20'>
         <h2 className='font-display text-3xl text-g-600 text-center mb-10'>
-          Why Frogs Parachute?
+          Why Parachute?
         </h2>
         <div className='grid sm:grid-cols-2 gap-4'>
           {features.map(({ icon, title, desc }) => (
