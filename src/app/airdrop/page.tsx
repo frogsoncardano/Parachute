@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useRef } from 'react'
 import { useWallet, useRewardAddress, useLovelace } from '@meshsdk/react'
 import { Transaction } from '@meshsdk/core'
 import { read, utils, writeFileXLSX } from 'xlsx'
-import { ExternalLink, Download, UploadCloud, AlertTriangle, CheckCircle2, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, Download, UploadCloud, AlertTriangle, CheckCircle2, Loader2, ChevronDown, ChevronUp, Images, Users } from 'lucide-react'
 import clsx from 'clsx'
 
 import api from '@/utils/api'
@@ -30,6 +30,7 @@ import {
   WALLETS,
 } from '@/constants'
 import type { PayoutRecipient, AirdropSettings, PopulatedToken } from '@/@types'
+import SnapshotSource from './snapshot-source'
 import { INIT_AIRDROP_SETTINGS } from '@/constants'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -186,7 +187,7 @@ function FileUpload({
                   payout.stakeKey = sk
                 }
               } catch (e: unknown) {
-                const msg = (e as Error)?.message || 'Unknown error'
+                const msg = typeof e === 'string' ? e : (e as Error)?.message || 'Unknown error'
                 rowErrors.push({
                   row: i + 1,
                   msg: msg.includes('provide a valid wallet') ? 'Invalid wallet identifier' : msg,
@@ -622,6 +623,40 @@ function PayoutPanel({
   )
 }
 
+// ─── Recipient source tabs ───────────────────────────────────────────────────
+
+type AirdropMode = 'list' | 'holders' | 'delegators'
+
+const MODES: { id: AirdropMode; label: string; icon: typeof UploadCloud }[] = [
+  { id: 'list', label: 'Upload Recipient List', icon: UploadCloud },
+  { id: 'holders', label: 'Airdrop to NFT holders', icon: Images },
+  { id: 'delegators', label: 'Airdrop to delegators', icon: Users },
+]
+
+function ModeTabs({ mode, onChange }: { mode: AirdropMode; onChange: (m: AirdropMode) => void }) {
+  return (
+    <div className='grid sm:grid-cols-3 gap-2 mb-5' role='tablist'>
+      {MODES.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          role='tab'
+          aria-selected={mode === id}
+          onClick={() => onChange(id)}
+          className={clsx(
+            'flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-all duration-150',
+            mode === id
+              ? 'border-g-600/60 bg-g-950/60 text-g-300'
+              : 'border-g-950 hover:border-g-900 hover:bg-g-950/30 text-g-700'
+          )}
+        >
+          <Icon size={15} className='shrink-0' />
+          <span className='truncate'>{label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AirdropPage() {
@@ -632,8 +667,16 @@ export default function AirdropPage() {
 
   const [settings, setSettings] = useState<AirdropSettings>({ ...INIT_AIRDROP_SETTINGS })
   const [recipients, setRecipients] = useState<PayoutRecipient[]>([])
+  const [mode, setMode] = useState<AirdropMode>('list')
 
   const tokenSelected = !!settings.tokenId
+  const balanceOnChain = tokens.find((t) => t.tokenId === settings.tokenId)?.tokenAmount.onChain ?? 0
+
+  const handleModeChange = (m: AirdropMode) => {
+    if (m === mode) return
+    setMode(m)
+    setRecipients([])
+  }
 
   const handleSelectToken = (t: PopulatedToken) => {
     setSettings((prev) => ({
@@ -682,8 +725,20 @@ export default function AirdropPage() {
           {/* Step 2: File */}
           {tokenSelected && (
             <div className='card p-6 animate-slide-up'>
-              <p className='section-label'>Step 2 — Upload Recipient List</p>
-              <FileUpload settings={settings} onRecipients={setRecipients} />
+              <p className='section-label'>Step 2 — Choose Recipients</p>
+              <ModeTabs mode={mode} onChange={handleModeChange} />
+              {/* key = reset the step whenever the mode or token changes */}
+              {mode === 'list' ? (
+                <FileUpload key={`list-${settings.tokenId}`} settings={settings} onRecipients={setRecipients} />
+              ) : (
+                <SnapshotSource
+                  key={`${mode}-${settings.tokenId}`}
+                  mode={mode}
+                  settings={settings}
+                  balanceOnChain={balanceOnChain}
+                  onRecipients={setRecipients}
+                />
+              )}
             </div>
           )}
         </div>
@@ -697,16 +752,30 @@ export default function AirdropPage() {
           {/* Help card */}
           {(!tokenSelected || recipients.length === 0) && (
             <div className='card p-5 text-sm text-g-800 space-y-3'>
-              <p className='section-label'>Excel file format</p>
-              <div className='font-mono text-xs bg-ink-950 rounded-xl p-3 space-y-1 text-g-700'>
-                <p className='text-g-500'>Wallet, Amount</p>
-                <p>addr1q9ew..., 10</p>
-                <p>stake1ux..., 420.69</p>
-                <p>$yourhandle, 5</p>
-              </div>
-              <p className='text-xs text-g-900'>
-                Supports addr1…, stake1…, and $ada-handles as wallet identifiers.
-              </p>
+              {mode === 'list' || !tokenSelected ? (
+                <>
+                  <p className='section-label'>Excel file format</p>
+                  <div className='font-mono text-xs bg-ink-950 rounded-xl p-3 space-y-1 text-g-700'>
+                    <p className='text-g-500'>Wallet, Amount</p>
+                    <p>addr1q9ew..., 10</p>
+                    <p>stake1ux..., 420.69</p>
+                    <p>$yourhandle, 5</p>
+                  </div>
+                  <p className='text-xs text-g-900'>
+                    Supports addr1…, stake1…, and $ada-handles as wallet identifiers.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className='section-label'>{mode === 'holders' ? 'NFT holder snapshot' : 'Delegator snapshot'}</p>
+                  <p className='text-xs text-g-700'>
+                    {mode === 'holders'
+                      ? 'We read every holder of the collection from the chain and split your amount by how many NFTs each wallet holds.'
+                      : 'We read every delegator of the pool from the chain and split your amount by how much ADA each wallet has delegated.'}
+                  </p>
+                  <p className='text-xs text-g-900'>Run the snapshot to see the recipients here.</p>
+                </>
+              )}
             </div>
           )}
         </div>
