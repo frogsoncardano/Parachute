@@ -480,7 +480,7 @@ function PayoutPanel({
     )
     ws['!cols'] = [{ width: 18 }, { width: 12 }, { width: 100 }, { width: 70 }, { width: 70 }]
     utils.book_append_sheet(wb, ws, 'receipt')
-    writeFileXLSX(wb, `Frogs Parachute receipt (${new Date().toLocaleDateString()}).xlsx`)
+    writeFileXLSX(wb, `Parachute receipt (${new Date().toLocaleDateString()}).xlsx`)
   }, [processed, settings, ticker])
 
   const displayRecipients = processed.length ? processed : recipients
