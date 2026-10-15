@@ -628,9 +628,9 @@ function PayoutPanel({
 type AirdropMode = 'list' | 'holders' | 'delegators'
 
 const MODES: { id: AirdropMode; label: string; icon: typeof UploadCloud }[] = [
-  { id: 'list', label: 'Upload Recipient List', icon: UploadCloud },
-  { id: 'holders', label: 'Airdrop to NFT holders', icon: Images },
-  { id: 'delegators', label: 'Airdrop to delegators', icon: Users },
+  { id: 'list', label: 'Upload List', icon: UploadCloud },
+  { id: 'holders', label: 'Airdrop to NFTs', icon: Images },
+  { id: 'delegators', label: 'Airdrop to Pool', icon: Users },
 ]
 
 function ModeTabs({ mode, onChange }: { mode: AirdropMode; onChange: (m: AirdropMode) => void }) {
