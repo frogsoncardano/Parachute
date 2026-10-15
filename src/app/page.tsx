@@ -44,7 +44,7 @@ export default function HomePage() {
           Parachute
         </h1>
         <p className='text-g-600 text-lg mb-2 max-w-lg mx-auto'>
-          The smoothest airdrop experience on the{' '}
+          The smoothest airdrop experience on {' '}
           <span className='text-g-400'>Cardano.</span>
         </p>
         <p className='font-mono text-xs text-g-800 mb-10'>
