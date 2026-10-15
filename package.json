@@ -1,14 +1,14 @@
 {
-  "name": "frogs-parachute",
-  "version": "0.1.0",
+  "name": "Parachute",
+  "version": "1.0.0",
   "private": true,
-  "author": "Ben Elferink <ben.elferink@icloud.com> (https://github.com/BenElferink)",
+  "author": "Ertürk <frogscardano@gmail.com> (https://github.com/frogsoncardano)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/BenElferink/ada-drop.git"
+    "url": "https://github.com/frogsoncardano/Parachute"
   },
   "bugs": {
-    "url": "https://github.com/BenElferink/ada-drop/issues"
+    "url": "https://github.com/frogsoncardano/Parachute"
   },
   "scripts": {
     "predev": "rm -rf .next",
