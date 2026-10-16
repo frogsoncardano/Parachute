@@ -31,6 +31,7 @@ import {
 } from '@/constants'
 import type { PayoutRecipient, AirdropSettings, PopulatedToken } from '@/@types'
 import SnapshotSource from './snapshot-source'
+import MidnightAirdrop from './midnight-airdrop'
 import { INIT_AIRDROP_SETTINGS } from '@/constants'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -480,7 +481,7 @@ function PayoutPanel({
     )
     ws['!cols'] = [{ width: 18 }, { width: 12 }, { width: 100 }, { width: 70 }, { width: 70 }]
     utils.book_append_sheet(wb, ws, 'receipt')
-    writeFileXLSX(wb, `Parachute receipt (${new Date().toLocaleDateString()}).xlsx`)
+    writeFileXLSX(wb, `Frogs Parachute receipt (${new Date().toLocaleDateString()}).xlsx`)
   }, [processed, settings, ticker])
 
   const displayRecipients = processed.length ? processed : recipients
@@ -628,9 +629,9 @@ function PayoutPanel({
 type AirdropMode = 'list' | 'holders' | 'delegators'
 
 const MODES: { id: AirdropMode; label: string; icon: typeof UploadCloud }[] = [
-  { id: 'list', label: 'Upload List', icon: UploadCloud },
-  { id: 'holders', label: 'Airdrop to NFTs', icon: Images },
-  { id: 'delegators', label: 'Airdrop to Pool', icon: Users },
+  { id: 'list', label: 'Upload Recipient List', icon: UploadCloud },
+  { id: 'holders', label: 'Airdrop to NFT holders', icon: Images },
+  { id: 'delegators', label: 'Airdrop to delegators', icon: Users },
 ]
 
 function ModeTabs({ mode, onChange }: { mode: AirdropMode; onChange: (m: AirdropMode) => void }) {
@@ -659,7 +660,7 @@ function ModeTabs({ mode, onChange }: { mode: AirdropMode; onChange: (m: Airdrop
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default function AirdropPage() {
+function CardanoAirdrop() {
   const { connected } = useWallet()
   const lovelaceStr = useLovelace()
   const lovelaces = Number(lovelaceStr || '0')
@@ -781,5 +782,42 @@ export default function AirdropPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── Chain switch ─────────────────────────────────────────────────────────────
+
+type Chain = 'cardano' | 'midnight'
+
+const CHAINS: { id: Chain; label: string; emoji: string }[] = [
+  { id: 'cardano', label: 'Cardano', emoji: '🐸' },
+  { id: 'midnight', label: 'Midnight', emoji: '🌙' },
+]
+
+export default function AirdropPage() {
+  const [chain, setChain] = useState<Chain>('cardano')
+
+  return (
+    <>
+      <div className='max-w-5xl mx-auto px-4 pt-8'>
+        <div className='inline-grid grid-cols-2 gap-2' role='tablist'>
+          {CHAINS.map(({ id, label, emoji }) => (
+            <button
+              key={id}
+              role='tab'
+              aria-selected={chain === id}
+              onClick={() => setChain(id)}
+              className={clsx(
+                'px-5 py-2 rounded-xl border text-sm transition-all duration-150',
+                chain === id ? 'border-g-600/60 bg-g-950/60 text-g-300' : 'border-g-950 hover:border-g-900 hover:bg-g-950/30 text-g-700'
+              )}
+            >
+              {emoji} {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {chain === 'cardano' ? <CardanoAirdrop /> : <MidnightAirdrop />}
+    </>
   )
 }
