@@ -21,7 +21,7 @@ export function Navbar() {
         <Link href='/' className='flex items-center gap-2.5 group shrink-0'>
           <span className='text-2xl animate-hop inline-block'>🐸</span>
           <span className='font-display text-xl text-g-400 tracking-wide group-hover:text-g-300 transition-colors'>
-            Parachute
+            Adachute
           </span>
         </Link>
 
