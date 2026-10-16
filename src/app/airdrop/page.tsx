@@ -30,6 +30,7 @@ import {
   WALLETS,
 } from '@/constants'
 import type { PayoutRecipient, AirdropSettings, PopulatedToken } from '@/@types'
+import { CIP20_LABEL, CIP20_MAX_MESSAGE_BYTES, messageBytes, splitCip20Message } from '@/functions/cip20'
 import SnapshotSource from './snapshot-source'
 import MidnightAirdrop from './midnight-airdrop'
 import { INIT_AIRDROP_SETTINGS } from '@/constants'
@@ -341,6 +342,7 @@ function PayoutPanel({
   const [status, setStatus] = useState<StatusMsg | null>(null)
   const [progress, setProgress] = useState({ current: 0, max: 0 })
   const [processed, setProcessed] = useState<PayoutRecipient[]>([])
+  const [message, setMessage] = useState('')
   const devPayed = useRef(false)
 
   const isLovelace = settings.tokenId === 'lovelace'
@@ -351,9 +353,17 @@ function PayoutPanel({
     [recipients]
   )
 
+  // Optional CIP-20 message, attached to every transaction of this airdrop
+  const msgBytes = messageBytes(message)
+  const msgLines = useMemo(() => splitCip20Message(message), [message])
+
   // Pre-flight checks
   const preflightStatus = useMemo<StatusMsg | null>(() => {
     if (!lovelaces || !recipients.length) return null
+
+    if (msgBytes > CIP20_MAX_MESSAGE_BYTES) {
+      return { type: 'error', msg: `Message is too long (${msgBytes}/${CIP20_MAX_MESSAGE_BYTES} bytes)` }
+    }
 
     const { isError: balanceErr, missingBalance } = verifyMinRequiredBalance(recipients, tokens, settings.tokenId)
     if (balanceErr) {
@@ -374,7 +384,7 @@ function PayoutPanel({
     }
 
     return { type: 'success', msg: `Preflight OK — ready to airdrop` }
-  }, [lovelaces, recipients, tokens, settings, isLovelace, devFee])
+  }, [lovelaces, recipients, tokens, settings, isLovelace, devFee, msgBytes])
 
   const runPayout = useCallback(
     async (batchSize: number = 0, prevDifference?: number): Promise<void> => {
@@ -414,6 +424,9 @@ function PayoutPanel({
               tx.sendAssets({ address }, [{ unit: settings.tokenId, quantity: String(payout) }])
             }
           }
+
+          // CIP-20 message, shown by explorers and wallets
+          if (msgLines.length) tx.setMetadata(CIP20_LABEL, { msg: msgLines })
 
           const unsigned = await tx.build()
           const signed = await wallet.signTx(unsigned)
@@ -464,7 +477,7 @@ function PayoutPanel({
         }
       }
     },
-    [wallet, processed, recipients, isLovelace, devFee, settings, stakeKey]
+    [wallet, processed, recipients, isLovelace, devFee, settings, stakeKey, msgLines]
   )
 
   const downloadReceipt = useCallback(() => {
@@ -529,6 +542,27 @@ function PayoutPanel({
           </button>
         )}
       </div>
+
+      {/* Optional message */}
+      {!ended && (
+        <div className='space-y-1.5'>
+          <label htmlFor='tx-message' className='text-xs text-g-600'>
+            Message on every transaction (optional)
+          </label>
+          <textarea
+            id='tx-message'
+            rows={2}
+            className='field resize-none'
+            placeholder='e.g. Airdrop from Frogs 🐸 thanks for holding!'
+            value={message}
+            disabled={started || processed.some(({ txHash }) => !!txHash)}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+          <p className={clsx('text-xs', msgBytes > CIP20_MAX_MESSAGE_BYTES ? 'text-red-400' : 'text-g-800')}>
+            {msgBytes}/{CIP20_MAX_MESSAGE_BYTES} bytes · public on-chain (CIP-20), shown by explorers and wallets
+          </p>
+        </div>
+      )}
 
       {/* Preflight */}
       {preflightStatus && (

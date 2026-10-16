@@ -65,6 +65,7 @@ interface BatchRun {
   status: 'pending' | 'sending' | 'done' | 'failed'
   error?: string
   maybeSent?: boolean
+  verified?: boolean // confirmed by the NIGHT balance dropping (the wallet sent it itself)
   note?: string
 }
 
@@ -92,7 +93,12 @@ const statusClass = (type: StatusMsg['type']) =>
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function MidnightAirdrop() {
+interface MidnightAirdropProps {
+  /** how long to watch the balance when a wallet completes a transfer itself (tests shorten this) */
+  confirmTiming?: { attempts: number; intervalMs: number }
+}
+
+export default function MidnightAirdrop({ confirmTiming }: MidnightAirdropProps = {}) {
   const [network, setNetwork] = useState<MidnightNetworkId>('mainnet')
   const [wallets, setWallets] = useState<WalletEntry[]>([])
   const [connecting, setConnecting] = useState('')
@@ -301,10 +307,12 @@ export default function MidnightAirdrop() {
 
         const result = await sendBatch(api, batches[i], {
           onRetry: (attempt, err) => patchRun(i, { note: `Waiting for funds to settle (retry ${attempt}): ${err}` }),
+          onWalletResponse: (response) => console.debug('[midnight] makeTransfer response', response),
+          ...(confirmTiming ? { verifyAttempts: confirmTiming.attempts, verifyIntervalMs: confirmTiming.intervalMs } : {}),
         })
 
         if (result.ok) {
-          patchRun(i, { status: 'done', note: undefined })
+          patchRun(i, { status: 'done', note: undefined, verified: result.verified })
         } else {
           patchRun(i, { status: 'failed', error: result.error, maybeSent: result.maybeSent, note: undefined })
           break // stop on the first failure, the user decides how to continue
@@ -319,6 +327,9 @@ export default function MidnightAirdrop() {
       }
     }
   }
+
+  // The user checked their wallet history and saw the transaction: stop treating it as unsent.
+  const markSent = (i: number) => patchRun(i, { status: 'done', error: undefined, maybeSent: false, verified: false, note: 'Marked as sent by you' })
 
   const doneCount = runs.filter((r) => r.status === 'done').length
   const failedRun = runs.find((r) => r.status === 'failed')
@@ -632,9 +643,17 @@ export default function MidnightAirdrop() {
                       <span className='text-g-800'>{r.status}</span>
                     </div>
                     {r.note && <p className='text-yellow-500 pl-4'>{r.note}</p>}
+                    {r.status === 'done' && r.verified && <p className='text-g-700 pl-4'>Confirmed: your NIGHT balance dropped by this amount.</p>}
                     {r.error && <p className='text-red-400 pl-4 break-words'>{r.error}</p>}
-                    {r.maybeSent && (
-                      <p className='text-yellow-500 pl-4'>This transaction may still have reached the network. Check your wallet history before resuming, or recipients could be paid twice.</p>
+                    {r.maybeSent && r.status === 'failed' && (
+                      <div className='pl-4 space-y-1.5'>
+                        <p className='text-yellow-500'>This transaction may have reached the network. Check your wallet history first, or recipients could be paid twice.</p>
+                        {!running && (
+                          <button className='btn-ghost text-xs px-3 py-1' onClick={() => markSent(i)}>
+                            I checked: it was sent
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
