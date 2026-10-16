@@ -41,7 +41,7 @@ export default function HomePage() {
         </div>
 
         <h1 className='font-display text-6xl md:text-7xl text-g-400 tracking-wide mb-4'>
-          Parachute
+          Adachute
         </h1>
         <p className='text-g-600 text-lg mb-2 max-w-lg mx-auto'>
           The smoothest airdrop experience on {' '}
@@ -85,7 +85,7 @@ export default function HomePage() {
       {/* Features */}
       <section className='pb-20'>
         <h2 className='font-display text-3xl text-g-600 text-center mb-10'>
-          Why Parachute?
+          Why Adachute?
         </h2>
         <div className='grid sm:grid-cols-2 gap-4'>
           {features.map(({ icon, title, desc }) => (
