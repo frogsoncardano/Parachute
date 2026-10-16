@@ -154,13 +154,20 @@ export interface MidnightRecipient {
   amount: bigint // in the smallest NIGHT unit (6 decimals)
 }
 
-/** The part of the wallet's ConnectedAPI we use (matches @midnight-ntwrk/dapp-connector-api 4.0.1). */
+/**
+ * The part of the wallet's ConnectedAPI we use (matches @midnight-ntwrk/dapp-connector-api 4.0.1).
+ *
+ * makeTransfer is typed `unknown` on purpose: the spec says it returns `{ tx }` to be passed to
+ * submitTransaction, but real wallets deviate. 1AM, for example, completes and submits the transfer
+ * itself and returns no `tx`, so we must not assume the shape.
+ */
 export interface MidnightTransferApi {
   makeTransfer(
     outputs: { kind: 'unshielded'; type: string; value: bigint; recipient: string }[],
     options?: { payFees?: boolean }
-  ): Promise<{ tx: string }>
+  ): Promise<unknown>
   submitTransaction(tx: string): Promise<void>
+  getUnshieldedBalances?(): Promise<Record<string, bigint>>
 }
 
 export interface SendBatchResult {
@@ -168,35 +175,66 @@ export interface SendBatchResult {
   error?: string
   /** the user rejected the request or the wallet disconnected: sending more batches makes no sense */
   fatal?: boolean
-  /** true when the failure happened AFTER the wallet handed us a transaction, so it may still have reached the network */
+  /** true when the failure happened AFTER the wallet accepted the transfer, so it may still reach (or have reached) the network */
   maybeSent?: boolean
+  /** success was confirmed by watching the NIGHT balance drop (wallet returned no transaction to submit) */
+  verified?: boolean
 }
 
 interface SendBatchOptions {
   retries?: number
   retryDelayMs?: number
+  /** how often / how long to watch the balance when the wallet completed the transfer itself */
+  verifyAttempts?: number
+  verifyIntervalMs?: number
   sleep?: (ms: number) => Promise<void>
   onRetry?: (attempt: number, error: string) => void
+  /** raw makeTransfer response, for debugging unusual wallets */
+  onWalletResponse?: (response: unknown) => void
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+const readNightBalance = async (api: MidnightTransferApi): Promise<bigint | null> => {
+  if (!api.getUnshieldedBalances) return null
+  try {
+    const balances = await api.getUnshieldedBalances()
+    return balances[NIGHT_TOKEN_TYPE] ?? 0n
+  } catch {
+    return null
+  }
+}
+
 /**
- * Sends one batch as a single transaction. The wallet pays the fee with DUST (payFees defaults to true).
+ * Sends one batch as a single transaction. The wallet pays (or sponsors) the fee, payFees defaults to true.
+ *
+ * Two kinds of wallets:
+ * - spec behaviour: makeTransfer returns `{ tx }`, we submit it with submitTransaction
+ * - self-completing wallets (1AM): makeTransfer sends it already and returns no `tx`. We then confirm by
+ *   watching the unshielded NIGHT balance drop by the batch total. We never treat "no tx" as a failure,
+ *   because the money may already be gone (that exact mistake would invite a second payment on Resume).
  *
  * Retry rules, chosen to never pay anyone twice:
- * - makeTransfer fails -> nothing was submitted, safe to retry (the previous batch may still be settling,
+ * - makeTransfer throws -> nothing was sent, safe to retry (the previous batch may still be settling,
  *   so "not enough funds" is expected for a short while)
- * - submitTransaction fails -> we can't know if it reached the network, so we do NOT retry, we report maybeSent
+ * - submitTransaction throws, or the balance never drops -> we can't know, so we do NOT retry and
+ *   report maybeSent
  */
 export const sendBatch = async (api: MidnightTransferApi, batch: MidnightRecipient[], opts: SendBatchOptions = {}): Promise<SendBatchResult> => {
-  const { retries = 4, retryDelayMs = 8000, sleep = defaultSleep, onRetry } = opts
+  const { retries = 4, retryDelayMs = 8000, verifyAttempts = 20, verifyIntervalMs = 3000, sleep = defaultSleep, onRetry, onWalletResponse } = opts
   const outputs = batch.map((r) => ({ kind: 'unshielded' as const, type: NIGHT_TOKEN_TYPE, value: r.amount, recipient: r.address }))
+  const total = batch.reduce((p, r) => p + r.amount, 0n)
 
-  let tx: string | undefined
+  // Balance right before asking the wallet. (Previous batches were already confirmed or settled by the
+  // time we get here, so the next drop is this batch.)
+  const before = await readNightBalance(api)
+
+  let response: unknown
+  let answered = false
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      tx = (await api.makeTransfer(outputs)).tx
+      response = await api.makeTransfer(outputs)
+      answered = true
       break
     } catch (e) {
       const msg = getMidnightErrorMessage(e)
@@ -206,12 +244,36 @@ export const sendBatch = async (api: MidnightTransferApi, batch: MidnightRecipie
       await sleep(retryDelayMs * (attempt + 1))
     }
   }
-  if (!tx) return { ok: false, error: 'Wallet returned no transaction' }
+  if (!answered) return { ok: false, error: 'Wallet did not answer' }
 
-  try {
-    await api.submitTransaction(tx)
-    return { ok: true }
-  } catch (e) {
-    return { ok: false, error: getMidnightErrorMessage(e), maybeSent: true }
+  onWalletResponse?.(response)
+
+  const tx = (response as { tx?: unknown } | null | undefined)?.tx
+  if (typeof tx === 'string' && tx.length > 0) {
+    try {
+      await api.submitTransaction(tx)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: getMidnightErrorMessage(e), maybeSent: true }
+    }
+  }
+
+  // The wallet completed the transfer itself: confirm it through the balance.
+  if (before === null) {
+    return {
+      ok: false,
+      maybeSent: true,
+      error: 'The wallet finished the transfer without returning a transaction, and your balance could not be read to confirm it.',
+    }
+  }
+  for (let i = 0; i < verifyAttempts; i++) {
+    const now = await readNightBalance(api)
+    if (now !== null && before - now >= total) return { ok: true, verified: true }
+    if (i < verifyAttempts - 1) await sleep(verifyIntervalMs)
+  }
+  return {
+    ok: false,
+    maybeSent: true,
+    error: 'The wallet accepted the transfer, but your NIGHT balance has not dropped yet. It may still be processing.',
   }
 }
